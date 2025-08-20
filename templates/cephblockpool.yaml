@@ -1,0 +1,36 @@
+{{- if .Values.cephBlockPools }}
+{{- range .Values.cephBlockPools }}
+---
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.operator.namespace }}
+  labels:
+    {{- include "rook-ceph-cluster.labels" $ | nindent 4 }}
+spec:
+  {{- toYaml .spec | nindent 2 }}
+{{- if .storageClass.enabled }}
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .storageClass.name }}
+  labels:
+    {{- include "rook-ceph-cluster.labels" $ | nindent 4 }}
+  {{- if .storageClass.isDefault }}
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+  {{- end }}
+allowVolumeExpansion: {{ .storageClass.allowVolumeExpansion }}
+reclaimPolicy: {{ .storageClass.reclaimPolicy }}
+provisioner: rook-ceph.rbd.csi.ceph.com
+parameters:
+  clusterID: {{ $.Values.operator.namespace }}
+  pool: {{ .name }}
+  {{- range $key, $val := .storageClass.parameters }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

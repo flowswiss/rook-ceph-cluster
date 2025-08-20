@@ -1,0 +1,130 @@
+{{- if .Values.cephCluster }}
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph
+  namespace: {{ .Values.operator.namespace }}
+  labels:
+    {{- include "rook-ceph-cluster.labels" . | nindent 4 }}
+spec:
+  cephVersion:
+    image: {{ .Values.cephCluster.cephVersion.image }}
+    allowUnsupported: {{ .Values.cephCluster.cephVersion.allowUnsupported }}
+  
+  dataDirHostPath: {{ .Values.cephCluster.dataDirHostPath }}
+  
+  {{- if .Values.cephCluster.dashboard }}
+  dashboard:
+    enabled: {{ .Values.cephCluster.dashboard.enabled }}
+    port: {{ .Values.cephCluster.dashboard.port }}
+    ssl: {{ .Values.cephCluster.dashboard.ssl }}
+    {{- if .Values.cephCluster.dashboard.urlPrefix }}
+    urlPrefix: {{ .Values.cephCluster.dashboard.urlPrefix }}
+    {{- end }}
+  {{- end }}
+  
+  skipUpgradeChecks: false
+  continueUpgradeAfterChecksEvenIfNotHealthy: false
+  waitTimeoutForHealthyOSDInMinutes: 10
+  
+  mon:
+    count: {{ .Values.cephCluster.mon.count }}
+    allowMultiplePerNode: {{ .Values.cephCluster.mon.allowMultiplePerNode }}
+  
+  mgr:
+    count: {{ .Values.cephCluster.mgr.count }}
+    allowMultiplePerNode: {{ .Values.cephCluster.mgr.allowMultiplePerNode }}
+    {{- if .Values.cephCluster.mgr.modules }}
+    modules:
+    {{- range .Values.cephCluster.mgr.modules }}
+    - name: {{ .name }}
+      enabled: {{ .enabled }}
+    {{- end }}
+    {{- end }}
+  
+  crashCollector:
+    disable: false
+  
+  logCollector:
+    enabled: true
+    periodicity: daily
+  
+  cleanupPolicy:
+    confirmation: ""
+    sanitizeDisks:
+      method: quick
+      dataSource: zero
+      iteration: 1
+    allowUninstallWithVolumes: false
+  
+  {{- if .Values.cephCluster.placement }}
+  placement:
+    {{- toYaml .Values.cephCluster.placement | nindent 4 }}
+  {{- end }}
+  
+  {{- if .Values.cephCluster.resources }}
+  resources:
+    {{- toYaml .Values.cephCluster.resources | nindent 4 }}
+  {{- end }}
+  
+  {{- if .Values.cephCluster.priorityClassNames }}
+  priorityClassNames:
+    {{- toYaml .Values.cephCluster.priorityClassNames | nindent 4 }}
+  {{- end }}
+  
+  storage:
+    useAllNodes: {{ .Values.cephCluster.storage.useAllNodes }}
+    useAllDevices: {{ .Values.cephCluster.storage.useAllDevices }}
+    {{- if .Values.cephCluster.storage.deviceFilter }}
+    deviceFilter: {{ .Values.cephCluster.storage.deviceFilter | quote }}
+    {{- end }}
+    {{- if .Values.cephCluster.storage.config }}
+    config:
+      {{- toYaml .Values.cephCluster.storage.config | nindent 6 }}
+    {{- end }}
+    {{- if .Values.cephCluster.storage.nodes }}
+    nodes:
+    {{- range .Values.cephCluster.storage.nodes }}
+    - name: {{ .name }}
+      {{- if .devices }}
+      devices:
+      {{- range .devices }}
+      - name: {{ .name }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+  
+  healthCheck:
+    daemonHealth:
+      mon:
+        disabled: false
+        interval: 45s
+      osd:
+        disabled: false
+        interval: 60s
+      status:
+        disabled: false
+        interval: 60s
+    livenessProbe:
+      mgr:
+        disabled: false
+      mon:
+        disabled: false
+      osd:
+        disabled: false
+  
+  disruptionManagement:
+    managePodBudgets: true
+    osdMaintenanceTimeout: 30
+    pgHealthCheckTimeout: 0
+  
+  network:
+    connections:
+      compression:
+        enabled: false
+  
+  security:
+    keyRotation:
+      enabled: false
+{{- end }}

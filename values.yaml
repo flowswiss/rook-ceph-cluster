@@ -1,0 +1,250 @@
+# Rook Ceph Cluster Configuration for k0s
+# Production-ready configuration for 3-node cluster
+
+# RBAC Configuration
+rbac:
+  create: true  # Create additional RBAC resources for k0s compatibility
+
+# Service Account (managed by Rook Operator installation)
+serviceAccount:
+  create: false  # Rook operator creates its own service accounts
+  name: ""
+
+# Name overrides
+nameOverride: ""
+fullnameOverride: ""
+
+# Rook Operator Configuration
+operator:
+  # Latest Rook version
+  image:
+    repository: rook/ceph
+    tag: v1.17.4
+    pullPolicy: IfNotPresent
+  
+  namespace: rook-ceph
+  
+  # k0s specific environment variables
+  env:
+    ROOK_CSI_KUBELET_DIR_PATH: "/var/lib/k0s/kubelet"
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Ceph Cluster Configuration  
+cephCluster:
+  # Latest Ceph version (Squid LTS)
+  cephVersion:
+    image: quay.io/ceph/ceph:v19.2.3
+    allowUnsupported: false
+  
+  # Dashboard Configuration
+  dashboard:
+    enabled: true
+    port: 8080
+    ssl: false
+
+  dataDirHostPath: /var/lib/rook
+  
+  # Monitor configuration (3 for HA)
+  mon:
+    count: 3
+    allowMultiplePerNode: false
+  
+  # Manager configuration
+  mgr:
+    count: 2
+    allowMultiplePerNode: false
+    modules:
+      - name: pg_autoscaler
+        enabled: true
+      - name: rook
+        enabled: true
+  
+  # Dashboard configuration
+  dashboard:
+    enabled: true
+    port: 8080
+    ssl: false
+  
+  crashCollector:
+    disable: false
+  
+  logCollector:
+    enabled: true
+    periodicity: daily
+  
+  cleanupPolicy:
+    confirmation: ""
+    sanitizeDisks:
+      method: quick
+      dataSource: zero
+      iteration: 1
+    allowUninstallWithVolumes: false
+  
+  # Storage configuration for your 3-node cluster
+  storage:
+    useAllNodes: true
+    useAllDevices: false
+    deviceFilter: "^sdb"
+    config:
+      osdsPerDevice: "1"
+    # Your specific nodes and devices
+    nodes:
+      - name: my-001-bit1
+        devices:
+          - name: sdb
+      - name: my-002-bit1
+        devices:
+          - name: sdb  
+      - name: my-003-bit1
+        devices:
+          - name: sdb
+  
+  # Node placement for your specific nodes
+  placement:
+    all:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                    - my-001-bit1
+                    - my-002-bit1
+                    - my-003-bit1
+  
+  resources:
+    mon:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+    mgr:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+    osd:
+      requests:
+        cpu: 500m
+        memory: 2Gi
+  
+  priorityClassNames:
+    mon: system-node-critical
+    osd: system-node-critical
+    mgr: system-cluster-critical
+  
+  healthCheck:
+    daemonHealth:
+      mon:
+        disabled: false
+        interval: 45s
+      osd:
+        disabled: false
+        interval: 60s
+      status:
+        disabled: false
+        interval: 60s
+    livenessProbe:
+      mon:
+        disabled: false
+      mgr:
+        disabled: false
+      osd:
+        disabled: false
+  
+  disruptionManagement:
+    managePodBudgets: true
+    osdMaintenanceTimeout: 30
+    pgHealthCheckTimeout: 0
+  
+  network:
+    connections:
+      compression:
+        enabled: false
+  
+  # Security settings for Ceph Cluster
+  security:
+    keyRotation:
+      enabled: false
+
+# Block Pool Configuration (optimized for 3-node cluster)
+cephBlockPools:
+  - name: replicapool
+    spec:
+      failureDomain: host
+      replicated:
+        size: 2  # Optimal for 3-node setup
+    storageClass:
+      enabled: true
+      name: rook-ceph-block
+      isDefault: false
+      reclaimPolicy: Delete
+      allowVolumeExpansion: true
+      parameters:
+        imageFormat: "2"
+        imageFeatures: layering
+        csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+        csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+        csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+        csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+        csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+        csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+        csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+
+# Filesystem Configuration (shared storage)
+cephFileSystems:
+  - name: myfs
+    spec:
+      metadataPool:
+        replicated:
+          size: 2  # Optimal for 3-node setup
+      dataPools:
+        - name: data0
+          replicated:
+            size: 2
+      preserveFilesystemOnDelete: true
+      metadataServer:
+        activeCount: 1
+        activeStandby: true
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+    storageClass:
+      enabled: true
+      name: rook-cephfs
+      isDefault: false
+      reclaimPolicy: Delete
+      allowVolumeExpansion: true
+      parameters:
+        clusterID: rook-ceph
+        fsName: myfs
+        pool: myfs-replicated
+        csi.storage.k8s.io/provisioner-secret-name: rook-csi-cephfs-provisioner
+        csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+        csi.storage.k8s.io/controller-expand-secret-name: rook-csi-cephfs-provisioner
+        csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+        csi.storage.k8s.io/node-stage-secret-name: rook-csi-cephfs-node
+        csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+
+# Toolbox (latest Ceph version)
+cephToolbox:
+  enabled: true
+  image: quay.io/ceph/ceph:v19.2.3
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Monitoring
+monitoring:
+  enabled: false

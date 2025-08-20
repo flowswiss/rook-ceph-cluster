@@ -1,0 +1,21 @@
+apiVersion: v2
+name: rook-ceph-cluster
+description: A Helm chart for Rook Ceph cluster deployment on k0s
+type: application
+version: 1.17.4
+appVersion: "v19.2.3"
+keywords:
+  - storage
+  - ceph
+  - rook
+  - distributed-storage
+  - k0s
+home: https://rook.io
+sources:
+  - https://github.com/rook/rook
+maintainers:
+  - name: masterguru
+    email: masterguru@example.com
+annotations:
+  category: Storage
+  licenses: Apache-2.0
