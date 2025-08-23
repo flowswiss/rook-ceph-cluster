@@ -1,0 +1,135 @@
+# Values für Rook Ceph Operator Helm Chart
+# Installation: helm install --create-namespace --namespace rook-ceph rook-ceph rook-release/rook-ceph -f rook-ceph-operator-values.yaml
+
+# Operator Image
+image:
+  repository: rook/ceph
+  tag: v1.17.4
+  pullPolicy: IfNotPresent
+
+# Replicas für den Operator
+replicas: 1
+
+# k0s spezifische Konfiguration
+# WICHTIG: k0s verwendet /var/lib/k0s/kubelet statt /var/lib/kubelet
+csi:
+  kubeletDirPath: /var/lib/k0s/kubelet
+  # CSI Provisioner Settings
+  provisionerReplicas: 2
+  enableCSIHostNetwork: false
+  pluginPriorityClassName: system-node-critical
+  provisionerPriorityClassName: system-cluster-critical
+  
+  # CSI Timeouts
+  grpcTimeoutInSeconds: 150
+  
+  # CSI Snapshotter Settings
+  enableRBDSnapshotter: true
+  enableCephFSSnapshotter: true
+  enableNFSSnapshotter: true
+  enableVolumeGroupSnapshot: true
+  
+  # CSI Driver Settings
+  enableCephFSDriver: true
+  enableRBDDriver: true
+  enableNFSDriver: false
+  
+  # CSI Attachment Settings
+  cephFSAttachRequired: true
+  rbdAttachRequired: true
+  nfsAttachRequired: true
+  
+  # FSGroupPolicy
+  cephFSFSGroupPolicy: File
+  rbdFSGroupPolicy: File
+  nfsFSGroupPolicy: File
+  
+  # Kernel Client Settings
+  forceCephFSKernelClient: true
+  
+  # Liveness and Addons
+  enableLiveness: false
+  enableCSIAddons: false
+  
+  # Holder Pods
+  disableHolderPods: true
+
+# Node Configuration
+currentNamespaceOnly: false
+hostpathRequiresPrivileged: false
+unreachableNodeTolerationSeconds: 5
+
+# Discovery Settings
+discover:
+  daemon:
+    enabled: false
+    interval: 60m
+  # Blacklist für Device Discovery
+  deviceFilter: "(?i)dm-[0-9]+,(?i)rbd[0-9]+,(?i)nbd[0-9]+"
+
+# Monitoring und Logging
+monitoring:
+  enabled: false
+logLevel: INFO
+
+# Resource Requests/Limits für den Operator
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Tolerations
+tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 5
+
+# Security Context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 2016
+  runAsGroup: 2016
+  capabilities:
+    drop:
+      - ALL
+
+# Service Account
+serviceAccount:
+  create: true
+  name: rook-ceph-system
+
+# Additional Environment Variables
+env:
+  - name: ROOK_CEPH_ALLOW_LOOP_DEVICES
+    value: "false"
+  - name: ROOK_CEPH_COMMANDS_TIMEOUT_SECONDS
+    value: "15"
+  - name: ROOK_DISABLE_DEVICE_HOTPLUG
+    value: "false"
+  - name: ROOK_ENABLE_DISCOVERY_DAEMON
+    value: "false"
+  - name: ROOK_OBC_WATCH_OPERATOR_NAMESPACE
+    value: "true"
+  - name: ROOK_WATCH_FOR_NODE_FAILURE
+    value: "true"
+
+# RBAC Settings
+rbac:
+  create: true
+
+# PSP Settings (falls noch in Verwendung)
+pspEnable: false
+
+# Enable Rook admission controller
+enableAdmissionController: false
+
+# CRD Settings
+crds:
+  enabled: true
+
+# Feature Gates
+enableFlexDriver: false
+enableDiscoveryDaemon: false

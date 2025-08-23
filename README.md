@@ -1,304 +1,225 @@
-# 🚀 Rook Ceph Helm Chart für k0s
+# Rook Ceph on k0s Kubernetes Cluster
 
-## Komplette Rook Ceph Installation für k0s Kubernetes
+This repository contains Helm values files and documentation for deploying Rook Ceph storage on a k0s-based Kubernetes cluster.
 
-Dieses Helm Chart installiert den **kompletten Rook Ceph Stack** auf frischen k0s Kubernetes-Clustern:
+## Prerequisites
 
-- ✅ **CRDs** (Custom Resource Definitions)
-- ✅ **Rook Operator** (rook-ceph-operator)
-- ✅ **CSI Driver** (RBD + CephFS)
-- ✅ **Ceph Cluster** (3-Node HA)
-- ✅ **Storage Classes** (Block + FileSystem)
-- ✅ **RBAC** (Alle benötigten Berechtigungen)
+- k0s Kubernetes cluster (v1.33.3+k0s.0 or later)
+- 3 nodes with dedicated storage devices for Ceph OSDs
+- Helm 3.x installed
+- kubectl configured to access your cluster
 
-## 🎯 Ein-Kommando-Installation
+## Cluster Architecture
 
-```bash
-# Komplette Installation mit automatischem CRD-Management
-./deploy.sh
+The deployment is configured for a 3-node cluster with the following specifications:
 
-# Oder manuell in 2 Schritten:
-kubectl apply -f crds/crds.yaml
-helm install rook-ceph-cluster . -n rook-ceph --create-namespace
-```
+- **Nodes**:
+  - my-001-bit1 (10.90.0.141) - Controller + Worker
+  - my-002-bit1 (10.90.0.142) - Controller + Worker
+  - my-003-bit1 (10.90.0.143) - Controller + Worker
 
-## 📋 Voraussetzungen
+- **Storage Configuration**:
+  - Each node has `/dev/sdb` dedicated for Ceph storage
+  - Replication factor: 2
+  - Failure domain: host
 
-- **k0s Kubernetes**: v1.28+ (empfohlen: v1.33+)
-- **Helm**: v3.8+
-- **Raw Storage**: `/dev/sdb` auf allen Worker Nodes
-- **Worker Nodes**: Mindestens 3 Nodes für HA
-- **Node Names**: `my-001-bit1`, `my-002-bit1`, `my-003-bit1` (anpassbar)
+## Important k0s-Specific Configuration
 
-## 🏗️ Architektur
+k0s uses a different kubelet path than standard Kubernetes distributions. This deployment is configured with:
+- **Kubelet Path**: `/var/lib/k0s/kubelet` (instead of `/var/lib/kubelet`)
 
-### **Generierte Kubernetes Ressourcen:**
+This is already configured in the provided values files.
 
-| Komponente | Beschreibung | Anzahl |
-|------------|-------------|--------|
-| **CRDs** | Custom Resource Definitions (separat) | 15 |
-| **Operator** | Rook Ceph Operator | 1 |
-| **ServiceAccounts** | RBAC Service Accounts | 9 |
-| **ClusterRoles** | Cluster-Berechtigungen | 3 |
-| **CSI Components** | RBD + CephFS Drivers | 4 |
-| **Ceph Cluster** | Haupt-Cluster-Ressource | 1 |
-| **Storage Pools** | Block + Filesystem Pools | 2 |
-| **StorageClasses** | Kubernetes Storage Classes | 2 |
-| **Services** | Ceph Services | 2 |
-| **ConfigMaps** | CSI Konfiguration | 2 |
+## Installation Guide
 
-### **Ceph Cluster Layout:**
-
-```
-┌─────────────────┬─────────────────┬─────────────────┐
-│   my-001-bit1   │   my-002-bit1   │   my-003-bit1   │
-├─────────────────┼─────────────────┼─────────────────┤
-│ MON + MGR + OSD │ MON + MGR + OSD │ MON + OSD       │
-│ /dev/sdb        │ /dev/sdb        │ /dev/sdb        │
-└─────────────────┴─────────────────┴─────────────────┘
-```
-
-## 🚀 Installation
-
-### **Methode 1: Automatisches Script (empfohlen)**
+### 1. Add Rook Helm Repository
 
 ```bash
-# Einfache Installation mit CRD-Management
-./deploy.sh
+helm repo add rook-release https://charts.rook.io/release
+helm repo update
 ```
 
-### **Methode 2: Manuell in 2 Schritten**
+### 2. Install Rook Ceph Operator
+
+Deploy the Rook Ceph operator using the provided values file:
 
 ```bash
-# Schritt 1: CRDs installieren
-kubectl apply -f crds/crds.yaml
-
-# Schritt 2: Helm Chart installieren
-helm install rook-ceph-cluster . \
-  --namespace rook-ceph \
-  --create-namespace \
-  --wait \
-  --timeout=20m
-
-# Status prüfen
-helm status rook-ceph-cluster -n rook-ceph
+helm install --create-namespace --namespace rook-ceph \
+  rook-ceph rook-release/rook-ceph \
+  -f rook-ceph-operator-values.yaml
 ```
 
-### **Methode 3: Mit angepassten Values**
+Wait for the operator to be ready:
 
 ```bash
-# CRDs und Chart mit angepassten Values
-kubectl apply -f crds/crds.yaml
-helm install rook-ceph-cluster . \
-  -n rook-ceph \
-  --create-namespace \
-  -f custom-values.yaml
+kubectl -n rook-ceph wait --for=condition=ready pod \
+  -l app=rook-ceph-operator --timeout=300s
 ```
 
-## ⚙️ Konfiguration
+### 3. Install Ceph Cluster
 
-### **Wichtige Values in `values.yaml`:**
-
-```yaml
-# Operator Konfiguration
-operator:
-  image:
-    tag: v1.17.4
-  namespace: rook-ceph
-
-# Ceph Cluster
-cephCluster:
-  cephVersion:
-    image: quay.io/ceph/ceph:v19.2.3
-  
-  # k0s-spezifischer Storage
-  storage:
-    deviceFilter: "^sdb"  # Alle /dev/sdb Devices
-    nodes:
-      - name: my-001-bit1
-        devices:
-          - name: sdb
-      # Weitere Nodes...
-
-  # HA Konfiguration
-  mon:
-    count: 3  # 3 Monitore für HA
-  mgr:
-    count: 2  # 2 Manager für HA
-
-# Storage Pools
-cephBlockPools:
-  - name: replicapool
-    spec:
-      replicated:
-        size: 2  # 2 Replicas bei 3 Nodes
-
-cephFileSystems:
-  - name: myfs
-    spec:
-      metadataPool:
-        replicated:
-          size: 2
-```
-
-## 📊 Nach der Installation
-
-### **Cluster Status prüfen:**
+Deploy the Ceph cluster using the cluster values file:
 
 ```bash
-# Helm Status
-helm status rook-ceph-cluster -n rook-ceph
-
-# Ceph Cluster Status
-kubectl get cephcluster -n rook-ceph
-
-# Alle Pods
-kubectl get pods -n rook-ceph
-
-# Ceph Health (nach ~5-10 Minuten)
-kubectl -n rook-ceph exec deploy/rook-ceph-cluster-tools -- ceph status
+helm install --namespace rook-ceph \
+  rook-ceph-cluster rook-release/rook-ceph-cluster \
+  -f rook-ceph-cluster-values.yaml
 ```
 
-### **Storage Classes verwenden:**
+### 4. Verify Installation
+
+Check cluster health:
 
 ```bash
-# Verfügbare Storage Classes
+# Check if all pods are running
+kubectl -n rook-ceph get pods
+
+# Check Ceph cluster status
+kubectl -n rook-ceph get cephcluster
+
+# Check storage classes
 kubectl get storageclass
-
-# Block Storage verwenden
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: my-rbd-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: rook-ceph-block
-
-# Shared Storage verwenden
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: my-shared-pvc
-spec:
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: rook-cephfs
 ```
 
-## 🔧 Management
+## Configuration Files
 
-### **Cluster-Operationen:**
+### rook-ceph-operator-values.yaml
+
+Key configurations:
+- CSI kubelet path adjusted for k0s
+- CSI provisioner replicas: 2
+- Enabled drivers: RBD and CephFS
+- Security context with non-root user (2016)
+- Node failure toleration: 5 seconds
+
+### rook-ceph-cluster-values.yaml
+
+Key configurations:
+- Ceph version: v19.2.3
+- Mon count: 3
+- Mgr count: 2
+- OSD devices: `/dev/sdb` on each node
+- Block pool replication: 2
+- CephFS metadata and data pool replication: 2
+- Dashboard enabled on port 8080 (no SSL)
+
+## Storage Classes
+
+The deployment creates two storage classes:
+
+1. **rook-ceph-block** - For RBD block storage
+   - Provisioner: `rook-ceph.rbd.csi.ceph.com`
+   - Pool: `replicapool`
+   - Features: Dynamic provisioning, volume expansion
+
+2. **rook-cephfs** - For CephFS shared filesystem
+   - Provisioner: `rook-ceph.cephfs.csi.ceph.com`
+   - Filesystem: `myfs`
+   - Features: Dynamic provisioning, volume expansion
+
+## Toolbox Access
+
+The Ceph toolbox is enabled for debugging and administration:
 
 ```bash
-# Upgrade
-helm upgrade rook-ceph-cluster . -n rook-ceph
-
-# Konfiguration anzeigen
-helm get values rook-ceph-cluster -n rook-ceph
-
-# Deinstallation (ACHTUNG: Löscht alle Daten!)
-helm uninstall rook-ceph-cluster -n rook-ceph
+kubectl -n rook-ceph exec -it deploy/rook-ceph-tools -- bash
 ```
 
-### **Ceph-Management:**
+Inside the toolbox, you can run Ceph commands:
 
 ```bash
-# Ceph Status
-kubectl -n rook-ceph exec deploy/rook-ceph-cluster-tools -- ceph status
-
-# OSD Status
-kubectl -n rook-ceph exec deploy/rook-ceph-cluster-tools -- ceph osd status
-
-# Pool Information
-kubectl -n rook-ceph exec deploy/rook-ceph-cluster-tools -- ceph df
+ceph status
+ceph osd status
+ceph df
 ```
 
-## 🛠️ Anpassungen
+## Monitoring
 
-### **Andere Node-Namen:**
+Dashboard access (if exposed):
+- Port: 8080
+- SSL: Disabled
+- URL Prefix: /
 
-In `values.yaml` unter `cephCluster.storage.nodes` anpassen:
-
-```yaml
-storage:
-  nodes:
-    - name: worker-1
-      devices:
-        - name: sdb
-    - name: worker-2
-      devices:
-        - name: sdb
-```
-
-### **Andere Storage-Devices:**
-
-```yaml
-storage:
-  deviceFilter: "^nvme"  # Für NVMe SSDs
-  nodes:
-    - name: my-001-bit1
-      devices:
-        - name: nvme0n1
-```
-
-### **Ressourcen-Limits anpassen:**
-
-```yaml
-cephCluster:
-  resources:
-    osd:
-      requests:
-        cpu: 1000m
-        memory: 4Gi
-      limits:
-        cpu: 2000m
-        memory: 8Gi
-```
-
-## ❗ Wichtige Hinweise
-
-- **Daten-Verlust**: Deinstallation löscht alle Ceph-Daten unwiderruflich
-- **Storage-Devices**: Müssen roh/unformatiert sein (`/dev/sdb` darf keine Partitionen haben)
-- **Network**: Alle Nodes müssen untereinander kommunizieren können
-- **Zeit**: Erste Installation kann 10-15 Minuten dauern
-
-## 🔍 Troubleshooting
-
-### **Cluster startet nicht:**
+To access the dashboard, you can use port-forwarding:
 
 ```bash
-# Operator Logs
-kubectl logs -n rook-ceph deployment/rook-ceph-operator
-
-# CephCluster Status
-kubectl describe cephcluster rook-ceph -n rook-ceph
+kubectl -n rook-ceph port-forward svc/rook-ceph-mgr-dashboard 8080:8080
 ```
 
-### **OSDs werden nicht erstellt:**
+## Upgrade Guide
+
+To upgrade the Rook operator or Ceph cluster:
+
+1. Update the operator:
+```bash
+helm upgrade --namespace rook-ceph rook-ceph rook-release/rook-ceph \
+  -f rook-ceph-operator-values.yaml
+```
+
+2. Update the cluster:
+```bash
+helm upgrade --namespace rook-ceph rook-ceph-cluster \
+  rook-release/rook-ceph-cluster -f rook-ceph-cluster-values.yaml
+```
+
+## Uninstallation
+
+⚠️ **Warning**: This will delete all data stored in Ceph!
+
+1. Delete the Ceph cluster:
+```bash
+helm uninstall --namespace rook-ceph rook-ceph-cluster
+```
+
+2. Delete the operator:
+```bash
+helm uninstall --namespace rook-ceph rook-ceph
+```
+
+3. Clean up the namespace:
+```bash
+kubectl delete namespace rook-ceph
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Pods stuck in Init or Pending state**
+   - Check node resources: `kubectl describe nodes`
+   - Check PVC status: `kubectl get pvc -A`
+
+2. **OSDs not coming up**
+   - Verify devices are available: `lsblk` on each node
+   - Check OSD logs: `kubectl -n rook-ceph logs -l app=rook-ceph-osd`
+
+3. **CSI issues**
+   - Verify kubelet path is correct: `/var/lib/k0s/kubelet`
+   - Check CSI pods: `kubectl -n rook-ceph get pods | grep csi`
+
+### Useful Commands
 
 ```bash
-# OSD Logs
-kubectl logs -n rook-ceph -l app=rook-ceph-osd-prepare
+# Check Ceph health from any node
+kubectl -n rook-ceph exec -it deploy/rook-ceph-tools -- ceph health detail
 
-# Device-Discovery
-kubectl logs -n rook-ceph -l app=rook-discover
+# List all Ceph resources
+kubectl -n rook-ceph get all
+
+# Check events for troubleshooting
+kubectl -n rook-ceph get events --sort-by='.lastTimestamp'
+
+# View operator logs
+kubectl -n rook-ceph logs -l app=rook-ceph-operator -f
 ```
 
-### **Storage Classes funktionieren nicht:**
+## Support
 
-```bash
-# CSI Logs
-kubectl logs -n rook-ceph -l app=csi-rbdplugin
-kubectl logs -n rook-ceph -l app=csi-cephfsplugin
-```
+For issues specific to:
+- Rook: [Rook GitHub Issues](https://github.com/rook/rook/issues)
+- k0s: [k0s GitHub Issues](https://github.com/k0sproject/k0s/issues)
+- Ceph: [Ceph Documentation](https://docs.ceph.com/)
 
----
+## License
 
-**Für Support und weitere Informationen siehe:** [Rook Documentation](https://rook.io/docs/)
+This configuration is provided as-is for use with Rook Ceph and k0s Kubernetes clusters.

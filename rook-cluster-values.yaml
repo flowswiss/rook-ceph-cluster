@@ -1,81 +1,30 @@
-# Values for FRESH INSTALLATION (new cluster)
-# Use this for completely new Rook Ceph deployments
+# Values für Rook Ceph Cluster Helm Chart
+# Installation: helm install --namespace rook-ceph rook-ceph-cluster rook-release/rook-ceph-cluster -f rook-ceph-cluster-values.yaml
 
-# Global settings
-global:
-  imageRegistry: ""
-  imagePullSecrets: []
+# Namespace für den Cluster
+operatorNamespace: rook-ceph
 
-# Name overrides
-nameOverride: ""
-fullnameOverride: ""
-
-# Rook Operator Configuration
-operator:
-  # Latest Rook version
-  image:
-    repository: rook/ceph
-    tag: v1.17.4
-    pullPolicy: IfNotPresent
-  
-  namespace: rook-ceph
-  
-  # k0s specific environment variables
-  env:
-    ROOK_CSI_KUBELET_DIR_PATH: "/var/lib/k0s/kubelet"
-    ROOK_CSI_CEPH_IMAGE: "quay.io/cephcsi/cephcsi:v3.12.2"
-    ROOK_CSI_REGISTRAR_IMAGE: "registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.11.1"
-    ROOK_CSI_RESIZER_IMAGE: "registry.k8s.io/sig-storage/csi-resizer:v1.11.1"
-    ROOK_CSI_PROVISIONER_IMAGE: "registry.k8s.io/sig-storage/csi-provisioner:v5.0.1"
-    ROOK_CSI_SNAPSHOTTER_IMAGE: "registry.k8s.io/sig-storage/csi-snapshotter:v8.0.1"
-    ROOK_CSI_ATTACHER_IMAGE: "registry.k8s.io/sig-storage/csi-attacher:v4.6.1"
-  
-  resources:
-    limits:
-      cpu: 500m
-      memory: 512Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
-  
-  # Scheduling
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  
-  # CSI Driver Configuration
-  csi:
-    enableRBD: true
-    enableCephFS: true
-    enableSnapshotter: true
-    pluginTolerations: []
-    provisionerTolerations: []
-    logLevel: 0
-  
-  # Discovery daemon for device detection
-  enableDiscoveryDaemon: true
-
-# Ceph Cluster Configuration  
-cephCluster:
-  # Latest Ceph version (Squid LTS)
+# Cluster Configuration
+cephClusterSpec:
+  # Ceph Version
   cephVersion:
     image: quay.io/ceph/ceph:v19.2.3
     allowUnsupported: false
   
+  # Data Directory auf den Hosts
   dataDirHostPath: /var/lib/rook
   
-  # Dashboard Configuration
-  dashboard:
-    enabled: true
-    port: 8080
-    ssl: false
-
-  # Monitor configuration (3 for HA)
+  # Cluster Management
+  skipUpgradeChecks: false
+  continueUpgradeAfterChecksEvenIfNotHealthy: false
+  waitTimeoutForHealthyOSDInMinutes: 10
+  
+  # Mon Configuration
   mon:
     count: 3
     allowMultiplePerNode: false
   
-  # Manager configuration (2 for HA)
+  # Mgr Configuration  
   mgr:
     count: 2
     allowMultiplePerNode: false
@@ -84,31 +33,65 @@ cephCluster:
         enabled: true
       - name: rook
         enabled: true
-
-  # Crash collector and log collector
+  
+  # Dashboard Configuration
+  dashboard:
+    enabled: true
+    port: 8080
+    ssl: false
+    urlPrefix: /
+  
+  # Network Configuration
+  network:
+    connections:
+      compression:
+        enabled: false
+  
+  # Crash Collector
   crashCollector:
     disable: false
   
+  # Log Collector
   logCollector:
     enabled: true
     periodicity: daily
   
+  # Cleanup Policy
   cleanupPolicy:
+    allowUninstallWithVolumes: false
     confirmation: ""
     sanitizeDisks:
       method: quick
       dataSource: zero
       iteration: 1
-    allowUninstallWithVolumes: false
   
-  # Storage configuration for your 3-node cluster
+  # Health Check Configuration
+  healthCheck:
+    daemonHealth:
+      mon:
+        disabled: false
+        interval: 45s
+      osd:
+        disabled: false
+        interval: 60s
+      status:
+        disabled: false
+        interval: 60s
+    livenessProbe:
+      mon:
+        disabled: false
+      mgr:
+        disabled: false
+      osd:
+        disabled: false
+  
+  # Storage Configuration
   storage:
     useAllNodes: true
     useAllDevices: false
     deviceFilter: "^sdb"
     config:
       osdsPerDevice: "1"
-    # Your specific nodes and devices
     nodes:
       - name: my-001-bit1
         devices:
@@ -120,21 +103,13 @@ cephCluster:
         devices:
           - name: sdb
   
-  # Node placement for your specific nodes
-  placement:
-    all:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-          - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-              - my-001-bit1
-              - my-002-bit1
-              - my-003-bit1
-
-  # Resource allocation optimized for k0s
+  # Disruption Management
+  disruptionManagement:
+    managePodBudgets: true
+    osdMaintenanceTimeout: 30
+    pgHealthCheckTimeout: 0
+  
+  # Resource Requests/Limits
   resources:
     mgr:
       requests:
@@ -148,54 +123,39 @@ cephCluster:
       requests:
         cpu: 500m
         memory: 2Gi
-
-  # Priority classes for critical workloads
+  
+  # Priority Class Names
   priorityClassNames:
     mon: system-node-critical
     osd: system-node-critical
     mgr: system-cluster-critical
-
-  # Health checks
-  healthCheck:
-    daemonHealth:
-      mon:
-        disabled: false
-        interval: 45s
-      osd:
-        disabled: false
-        interval: 60s
-      status:
-        disabled: false
-        interval: 60s
-    livenessProbe:
-      mgr:
-        disabled: false
-      mon:
-        disabled: false
-      osd:
-        disabled: false
   
-  disruptionManagement:
-    managePodBudgets: true
-    osdMaintenanceTimeout: 30
-    pgHealthCheckTimeout: 0
+  # Placement Configuration für alle Nodes
+  placement:
+    all:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                    - my-001-bit1
+                    - my-002-bit1
+                    - my-003-bit1
   
-  network:
-    connections:
-      compression:
-        enabled: false
-  
+  # Security Settings
   security:
     keyRotation:
       enabled: false
 
-# Block storage pool configuration
+# Block Pool Configuration
 cephBlockPools:
   - name: replicapool
     spec:
       failureDomain: host
       replicated:
-        size: 2  # 2 replicas for 3-node cluster
+        size: 2
     storageClass:
       enabled: true
       name: rook-ceph-block
@@ -213,7 +173,7 @@ cephBlockPools:
         csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
         csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
 
-# Filesystem Configuration (shared storage)
+# File System Configuration
 cephFileSystems:
   - name: myfs
     spec:
@@ -224,7 +184,6 @@ cephFileSystems:
         - name: data0
           replicated:
             size: 2
-      preserveFilesystemOnDelete: true
       metadataServer:
         activeCount: 1
         activeStandby: true
@@ -232,6 +191,7 @@ cephFileSystems:
           requests:
             cpu: 500m
             memory: 1Gi
+      preserveFilesystemOnDelete: true
     storageClass:
       enabled: true
       name: rook-cephfs
@@ -246,18 +206,32 @@ cephFileSystems:
         csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
         csi.storage.k8s.io/node-stage-secret-name: rook-csi-cephfs-node
         csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
-        pool: myfs-replicated
 
-# Toolbox for debugging and management
+# Object Store Configuration (deaktiviert, da nicht in Ihrem Cluster vorhanden)
+cephObjectStores: []
+
+# Block Pool Configuration für CSI
+cephBlockPoolsVolumeSnapshotClass:
+  enabled: false
+
+# Monitoring (deaktiviert, da nicht in Ihrem Cluster konfiguriert)
+monitoring:
+  enabled: false
+  createPrometheusRules: false
+
+# Ingress Configuration (optional)
+ingress:
+  dashboard:
+    enabled: false
+
+# Toolbox Deployment (praktisch für Debugging)
 toolbox:
   enabled: true
   image: quay.io/ceph/ceph:v19.2.3
-  tolerations: []
-  affinity: {}
   resources:
-    limits:
-      cpu: 500m
-      memory: 1Gi
     requests:
       cpu: 100m
       memory: 128Mi
+
+# Cleanup on Uninstall
+cleanupPolicyConfirmation: ""
