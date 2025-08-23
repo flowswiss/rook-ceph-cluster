@@ -1,6 +1,6 @@
 apiVersion: v2
 name: rook-ceph-cluster
-description: Complete Helm chart for Rook Ceph operator and cluster deployment on k0s
+description: Complete Helm chart for fresh Rook Ceph installation on k0s
 type: application
 version: 1.17.4
 appVersion: "v19.2.3"
@@ -11,7 +11,7 @@ keywords:
   - distributed-storage
   - k0s
   - operator
-  - complete-stack
+  - fresh-install
 home: https://rook.io
 sources:
   - https://github.com/rook/rook

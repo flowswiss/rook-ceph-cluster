@@ -1,4 +1,3 @@
-{{- if .Values.operator.csi.enableRBD }}
 # CSI RBD Plugin DaemonSet
 apiVersion: apps/v1
 kind: DaemonSet
@@ -321,4 +320,3 @@ spec:
       tolerations:
         {{- toYaml .Values.operator.csi.provisionerTolerations | nindent 6 }}
       {{- end }}
-{{- end }}

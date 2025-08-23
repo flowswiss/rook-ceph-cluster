@@ -1,4 +1,4 @@
-{{- if .Values.cephToolbox.enabled }}
+{{- if .Values.toolbox.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,7 +22,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
       - name: rook-ceph-tools
-        image: {{ .Values.cephToolbox.image }}
+        image: {{ .Values.toolbox.image }}
         command:
           - /bin/bash
           - -c
@@ -104,7 +104,7 @@ spec:
                 name: rook-ceph-mon
                 key: ceph-secret
         resources:
-          {{- toYaml .Values.cephToolbox.resources | nindent 10 }}
+          {{- toYaml .Values.toolbox.resources | nindent 10 }}
         volumeMounts:
           - mountPath: /etc/ceph
             name: ceph-config
