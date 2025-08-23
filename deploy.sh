@@ -21,8 +21,20 @@ if kubectl get namespace $NAMESPACE 2>/dev/null; then
     fi
 fi
 
-# Install complete stack
-echo "🔧 Installing complete Rook Ceph stack..."
+# Step 1: Install CRDs first
+echo "📋 Step 1: Installing Rook CRDs..."
+kubectl apply -f crds/crds.yaml
+echo "✅ CRDs installed"
+
+# Wait for CRDs to be established
+echo "⏳ Waiting for CRDs to be established..."
+kubectl wait --for condition=established crd/cephclusters.ceph.rook.io --timeout=60s
+kubectl wait --for condition=established crd/cephblockpools.ceph.rook.io --timeout=60s
+kubectl wait --for condition=established crd/cephfilesystems.ceph.rook.io --timeout=60s
+echo "✅ CRDs are ready"
+
+# Step 2: Install complete stack with Helm
+echo "🔧 Step 2: Installing Rook Ceph stack with Helm..."
 helm upgrade --install $HELM_RELEASE . \
   --namespace $NAMESPACE \
   --create-namespace \
@@ -38,7 +50,7 @@ echo "📊 Pods:"
 kubectl get pods -n $NAMESPACE
 echo ""
 echo "📊 CRDs:"
-kubectl get crd | grep ceph.rook.io
+kubectl get crd | grep ceph.rook.io | wc -l | xargs echo "CRDs installed:"
 echo ""
 echo "📊 Cluster Resources:"
 kubectl get cephcluster,cephblockpool,cephfilesystem -n $NAMESPACE
@@ -57,4 +69,4 @@ echo ""
 echo "🔧 Management:"
 echo "   • Status: helm status $HELM_RELEASE -n $NAMESPACE"
 echo "   • Upgrade: helm upgrade $HELM_RELEASE . -n $NAMESPACE"
-echo "   • Uninstall: helm uninstall $HELM_RELEASE -n $NAMESPACE"
+echo "   • Uninstall: ./uninstall.sh"

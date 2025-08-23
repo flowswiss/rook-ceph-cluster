@@ -14,11 +14,12 @@ Dieses Helm Chart installiert den **kompletten Rook Ceph Stack** auf frischen k0
 ## 🎯 Ein-Kommando-Installation
 
 ```bash
-# Komplette Installation mit einem Befehl
-helm install rook-ceph-cluster . -n rook-ceph --create-namespace
-
-# Oder mit dem praktischen Script
+# Komplette Installation mit automatischem CRD-Management
 ./deploy.sh
+
+# Oder manuell in 2 Schritten:
+kubectl apply -f crds/crds.yaml
+helm install rook-ceph-cluster . -n rook-ceph --create-namespace
 ```
 
 ## 📋 Voraussetzungen
@@ -35,9 +36,9 @@ helm install rook-ceph-cluster . -n rook-ceph --create-namespace
 
 | Komponente | Beschreibung | Anzahl |
 |------------|-------------|--------|
-| **CRDs** | Custom Resource Definitions | 5 |
+| **CRDs** | Custom Resource Definitions (separat) | 15 |
 | **Operator** | Rook Ceph Operator | 1 |
-| **ServiceAccounts** | RBAC Service Accounts | 7 |
+| **ServiceAccounts** | RBAC Service Accounts | 9 |
 | **ClusterRoles** | Cluster-Berechtigungen | 3 |
 | **CSI Components** | RBD + CephFS Drivers | 4 |
 | **Ceph Cluster** | Haupt-Cluster-Ressource | 1 |
@@ -59,10 +60,20 @@ helm install rook-ceph-cluster . -n rook-ceph --create-namespace
 
 ## 🚀 Installation
 
-### **Methode 1: Helm direkt**
+### **Methode 1: Automatisches Script (empfohlen)**
 
 ```bash
-# Chart installieren
+# Einfache Installation mit CRD-Management
+./deploy.sh
+```
+
+### **Methode 2: Manuell in 2 Schritten**
+
+```bash
+# Schritt 1: CRDs installieren
+kubectl apply -f crds/crds.yaml
+
+# Schritt 2: Helm Chart installieren
 helm install rook-ceph-cluster . \
   --namespace rook-ceph \
   --create-namespace \
@@ -73,17 +84,11 @@ helm install rook-ceph-cluster . \
 helm status rook-ceph-cluster -n rook-ceph
 ```
 
-### **Methode 2: Deployment Script**
-
-```bash
-# Einfache Installation
-./deploy.sh
-```
-
 ### **Methode 3: Mit angepassten Values**
 
 ```bash
-# values.yaml anpassen (z.B. andere Node-Namen)
+# CRDs und Chart mit angepassten Values
+kubectl apply -f crds/crds.yaml
 helm install rook-ceph-cluster . \
   -n rook-ceph \
   --create-namespace \
