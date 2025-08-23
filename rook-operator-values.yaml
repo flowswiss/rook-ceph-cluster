@@ -4,7 +4,7 @@
 # Operator Image
 image:
   repository: rook/ceph
-  tag: v1.17.4
+  tag: v1.18.0
   pullPolicy: IfNotPresent
 
 # Replicas für den Operator
