@@ -1,6 +1,6 @@
 # Rook Ceph Cluster Helm Chart
 
-Helm Chart for Rook Ceph Storage on k0s Kubernetes.
+Production-ready Helm Chart for Rook Ceph Storage on k0s Kubernetes.
 
 ## Overview
 
